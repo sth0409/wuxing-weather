@@ -86,6 +86,12 @@ async function getWeather24h(location, env) {
   return resp.json();
 }
 
+async function getWeather72h(location, env) {
+  const url = `${env.QWEATHER_HOST}/v7/weather/24h?location=${location}&key=${env.QWEATHER_KEY}`;
+  const resp = await fetch(url);
+  return resp.json();
+}
+
 // ============ Pages Function 入口 ============
 
 export async function onRequestGet(context) {
