@@ -117,6 +117,23 @@
     
     .empty-tip { text-align: center; padding: 40px; color: #999; }
     .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #999; }
+    
+    /* 定位按钮 */
+    .locate-add-btn {
+      width: 100%;
+      padding: 14px;
+      border: 2px dashed #764ba2;
+      border-radius: 12px;
+      background: transparent;
+      color: #764ba2;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: all 0.2s;
+    }
+    .locate-add-btn:hover { background: #f3e8ff; }
+    .locate-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -127,9 +144,12 @@
     </div>
 
     <div class="section">
-      <div class="section-title">🔍 添加城市</div>
+      <div class="section-title">📍 添加城市</div>
+      <button class="locate-add-btn" id="locateAddBtn" onclick="locateAndAdd()">
+        📍 定位并添加当前位置
+      </button>
       <div class="search-box">
-        <input type="text" class="search-input" id="searchInput" placeholder="输入城市名称搜索..." autocomplete="off">
+        <input type="text" class="search-input" id="searchInput" placeholder="或输入城市名称搜索..." autocomplete="off">
       </div>
       <div class="search-result" id="searchResult">
         <div class="search-hint">输入城市名称开始搜索</div>
@@ -219,7 +239,7 @@
       searchTimer = setTimeout(async () => {
         try {
           // 使用和风天气地理API搜索
-          const resp = await fetch(`${QWEATHER_HOST}/v2/city/lookup?location=${encodeURIComponent(value)}&key=${QWEATHER_KEY}&number=20`);
+          const resp = await fetch(`${QWEATHER_HOST}/geo/v2/city/lookup?location=${encodeURIComponent(value)}&key=${QWEATHER_KEY}&number=20&range=cn`);
           const data = await resp.json();
           
           if (data.code === '200' && data.location && data.location.length > 0) {
@@ -262,6 +282,66 @@
           }
         });
       }
+    }
+
+    // 定位并添加城市
+    async function locateAndAdd() {
+      const btn = document.getElementById('locateAddBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ 定位中...';
+      
+      if (!navigator.geolocation) {
+        alert('您的浏览器不支持定位功能');
+        btn.disabled = false;
+        btn.textContent = '📍 定位并添加当前位置';
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          
+          try {
+            // 使用经纬度查询城市信息
+            const resp = await fetch(`../api?location=${longitude},${latitude}`);
+            const data = await resp.json();
+            
+            if (data.code === '200' && data.cityId) {
+              const city = { name: data.cityName, id: data.cityId };
+              
+              // 检查是否已添加
+              let cities = getCities();
+              if (cities.find(c => c.id === city.id)) {
+                alert(`${city.name} 已在列表中`);
+              } else {
+                cities.push(city);
+                saveCities(cities);
+                renderCityList();
+                alert(`已添加：${city.name}`);
+              }
+            } else {
+              alert('无法识别当前位置，请手动搜索添加');
+            }
+          } catch (err) {
+            console.error(err);
+            alert('定位查询失败，请重试');
+          }
+          
+          btn.disabled = false;
+          btn.textContent = '📍 定位并添加当前位置';
+        },
+        (error) => {
+          console.error('定位失败:', error);
+          let msg = '定位失败';
+          if (error.code === 1) msg = '请允许定位权限';
+          else if (error.code === 2) msg = '无法获取位置信息';
+          else if (error.code === 3) msg = '定位超时，请重试';
+          alert(msg);
+          btn.disabled = false;
+          btn.textContent = '📍 定位并添加当前位置';
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
     }
 
     // 初始化
