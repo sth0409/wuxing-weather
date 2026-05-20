@@ -36,12 +36,13 @@ function getWuxingOrder(zhi) {
   const wuXing = ZHI_WU_XING[zhi];
   const index = WU_XING_LIST.indexOf(wuXing);
   
+  // 排序：我生(吉)、同我(次吉)、克我(平)、生我(较差)、我克(不宜)
   const orderIndices = [
-    (index + 1) % 5,
-    index,
-    (index + 4) % 5,
-    (index + 3) % 5,
-    (index + 2) % 5
+    (index + 1) % 5,      // 我生者 - 吉（火生土=2, 土生金=3...）
+    index,                 // 同我者 - 次吉
+    (index + 3) % 5,      // 克我者 - 平（水克火=4, 金克木=3...）
+    (index - 1 + 5) % 5,  // 生我者 - 较差（木生火=0, 水生木=4...）
+    (index + 2) % 5       // 我克者 - 不宜（火克金=3, 金克木=0...）
   ];
   
   return orderIndices.map((colorIdx, i) => ({
