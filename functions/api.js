@@ -36,13 +36,12 @@ function getWuxingOrder(zhi) {
   const wuXing = ZHI_WU_XING[zhi];
   const index = WU_XING_LIST.indexOf(wuXing);
   
-  // 排序：我生(吉)、同我(次吉)、克我(平)、生我(较差)、我克(不宜)
   const orderIndices = [
-    (index + 1) % 5,      // 我生者 - 吉（火生土=2, 土生金=3...）
-    index,                 // 同我者 - 次吉
-    (index + 3) % 5,      // 克我者 - 平（水克火=4, 金克木=3...）
-    (index - 1 + 5) % 5,  // 生我者 - 较差（木生火=0, 水生木=4...）
-    (index + 2) % 5       // 我克者 - 不宜（火克金=3, 金克木=0...）
+    (index + 1) % 5,
+    index,
+    (index + 3) % 5,
+    (index - 1 + 5) % 5,
+    (index + 2) % 5
   ];
   
   return orderIndices.map((colorIdx, i) => ({
@@ -86,10 +85,15 @@ async function getWeather24h(location, env) {
   return resp.json();
 }
 
-async function getWeather72h(location, env) {
-  const url = `${env.QWEATHER_HOST}/v7/weather/24h?location=${location}&key=${env.QWEATHER_KEY}`;
+// 通过经纬度获取城市信息
+async function getCityByCoords(lon, lat, env) {
+  const url = `${env.QWEATHER_HOST}/v2/city/lookup?location=${lon},${lat}&key=${env.QWEATHER_KEY}`;
   const resp = await fetch(url);
-  return resp.json();
+  const data = await resp.json();
+  if (data.code === '200' && data.location && data.location.length > 0) {
+    return data.location[0];
+  }
+  return null;
 }
 
 // ============ Pages Function 入口 ============
@@ -98,12 +102,28 @@ export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
   
-  const location = url.searchParams.get('location') || '101010100';
+  const locationParam = url.searchParams.get('location') || '101010100';
   
   const now = new Date();
   const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
   const ganZhi = getGanZhi(beijingTime);
   const wuXing = getWuxingOrder(ganZhi.zhi);
+  
+  // 判断是城市ID还是经纬度
+  let location = locationParam;
+  let cityName = '';
+  let cityId = locationParam;
+  
+  if (locationParam.includes(',')) {
+    // 经纬度查询
+    const [lon, lat] = locationParam.split(',');
+    const cityInfo = await getCityByCoords(lon, lat, env);
+    if (cityInfo) {
+      location = cityInfo.id;
+      cityName = cityInfo.name;
+      cityId = cityInfo.id;
+    }
+  }
   
   const [weatherData, hourlyData] = await Promise.all([
     getWeatherNow(location, env),
@@ -128,7 +148,9 @@ export async function onRequestGet(context) {
     wuXing,
     weather: weatherData.now,
     hourly: hourlyData.hourly || [],
-    advice
+    advice,
+    cityName: cityName || weatherData.now.obsCity || '',
+    cityId
   }), {
     headers: { 'Content-Type': 'application/json' }
   });
