@@ -26,6 +26,39 @@
     @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
     .header .date { font-size: 14px; color: #666; }
     .header .ganzhi { font-size: 18px; color: #764ba2; font-weight: bold; margin-top: 8px; }
+    
+    /* 顶部操作栏 */
+    .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .city-name { font-size: 16px; font-weight: bold; color: #333; }
+    .settings-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 50%;
+      background: #f0f0f0;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .settings-btn:hover { background: #e0e0e0; }
+    
+    /* 城市标签 */
+    .city-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .city-tag {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 20px;
+      background: #e9ecef;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .city-tag:hover { background: #dee2e6; }
+    .city-tag.active { background: #764ba2; color: white; }
+    
     .section { margin-bottom: 20px; }
     .section-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #eee; }
     .wuxing-list { display: flex; flex-direction: column; gap: 8px; }
@@ -49,57 +82,6 @@
     .weather-detail div { text-align: center; }
     .advice-list { display: flex; flex-direction: column; gap: 8px; }
     .advice-item { padding: 12px; background: #f8f9fa; border-radius: 8px; font-size: 14px; }
-    
-    /* 城市搜索样式 */
-    .city-search { margin-bottom: 20px; position: relative; }
-    .search-input {
-      width: 100%;
-      padding: 12px 16px;
-      border: 2px solid #e9ecef;
-      border-radius: 12px;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    .search-input:focus { border-color: #764ba2; }
-    .search-result {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: white;
-      border-radius: 0 0 12px 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      max-height: 200px;
-      overflow-y: auto;
-      z-index: 100;
-      display: none;
-    }
-    .search-result.show { display: block; }
-    .search-item {
-      padding: 12px 16px;
-      cursor: pointer;
-      border-bottom: 1px solid #eee;
-      font-size: 14px;
-    }
-    .search-item:hover { background: #f5f5f5; }
-    .search-item:last-child { border-bottom: none; }
-    .search-item .city-name { font-weight: bold; }
-    .search-item .city-info { font-size: 12px; color: #999; margin-top: 2px; }
-    
-    /* 常用城市 */
-    .city-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .city-tag {
-      padding: 6px 12px;
-      border: none;
-      border-radius: 16px;
-      background: #e9ecef;
-      cursor: pointer;
-      font-size: 13px;
-      transition: all 0.2s;
-    }
-    .city-tag:hover { background: #dee2e6; }
-    .city-tag.active { background: #764ba2; color: white; }
     
     /* 24小时预报 */
     .hourly-scroll {
@@ -140,13 +122,11 @@
       <div class="ganzhi" id="ganzhi"></div>
     </div>
 
-    <!-- 城市搜索 -->
-    <div class="city-search">
-      <input type="text" class="search-input" id="searchInput" placeholder="🔍 搜索城市（支持县级）" autocomplete="off">
-      <div class="search-result" id="searchResult"></div>
+    <div class="top-bar">
+      <div class="city-name" id="cityName">北京</div>
+      <button class="settings-btn" onclick="location.href='settings.html'">⚙️</button>
     </div>
 
-    <!-- 常用城市 -->
     <div class="city-tags" id="cityTags"></div>
 
     <div class="weather-card" id="weatherCard">
@@ -175,22 +155,9 @@
 
   <script>
     const API_BASE = window.location.origin;
-    const QWEATHER_HOST = 'https://jt52qd926j.re.qweatherapi.com';
-    const QWEATHER_KEY = 'aa2e1d81335d4db4bf9f7ac2246fbd4a';
     
-    // 常用城市
-    const DEFAULT_CITIES = [
-      { name: '北京', id: '101010100' },
-      { name: '上海', id: '101020100' },
-      { name: '广州', id: '101280101' },
-      { name: '深圳', id: '101280601' },
-      { name: '杭州', id: '101210101' },
-      { name: '南京', id: '101190101' },
-      { name: '成都', id: '101270101' },
-      { name: '重庆', id: '101040100' },
-      { name: '武汉', id: '101200101' },
-      { name: '西安', id: '101110101' },
-    ];
+    // 默认城市
+    const DEFAULT_CITY = { name: '北京', id: '101010100' };
 
     // 天气图标映射
     const WEATHER_ICONS = {
@@ -208,91 +175,60 @@
       return '🌤️';
     }
 
-    // 城市搜索
-    let searchTimer = null;
-    const searchInput = document.getElementById('searchInput');
-    const searchResult = document.getElementById('searchResult');
-
-    searchInput.addEventListener('input', (e) => {
-      clearTimeout(searchTimer);
-      const value = e.target.value.trim();
-      
-      if (value.length < 1) {
-        searchResult.classList.remove('show');
-        return;
-      }
-
-      searchTimer = setTimeout(async () => {
-        try {
-          const resp = await fetch(`${QWEATHER_HOST}/v2/city/lookup?location=${encodeURIComponent(value)}&key=${QWEATHER_KEY}&number=10`);
-          const data = await resp.json();
-          
-          if (data.code === '200' && data.location && data.location.length > 0) {
-            searchResult.innerHTML = data.location.map(city => `
-              <div class="search-item" onclick="selectCity('${city.name}', '${city.id}')">
-                <div class="city-name">${city.name}</div>
-                <div class="city-info">${city.adm1} · ${city.adm2} · ${city.id}</div>
-              </div>
-            `).join('');
-            searchResult.classList.add('show');
-          } else {
-            searchResult.innerHTML = '<div class="search-item">未找到该城市</div>';
-            searchResult.classList.add('show');
-          }
-        } catch (err) {
-          console.error(err);
+    // 获取用户保存的城市列表
+    function getCities() {
+      const saved = localStorage.getItem('wuxing_cities');
+      if (saved) {
+        const cities = JSON.parse(saved);
+        // 确保默认城市在列表中
+        if (!cities.find(c => c.id === DEFAULT_CITY.id)) {
+          cities.unshift(DEFAULT_CITY);
         }
-      }, 300);
-    });
-
-    // 点击其他区域关闭搜索结果
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.city-search')) {
-        searchResult.classList.remove('show');
+        return cities;
       }
-    });
-
-    function selectCity(name, id) {
-      searchResult.classList.remove('show');
-      searchInput.value = '';
-      
-      // 保存到本地存储
-      let cities = JSON.parse(localStorage.getItem('wuxing_cities') || '[]');
-      if (!cities.find(c => c.id === id)) {
-        cities.unshift({ name, id });
-        if (cities.length > 20) cities = cities.slice(0, 20);
-        localStorage.setItem('wuxing_cities', JSON.stringify(cities));
-      }
-      
-      // 跳转
-      window.location.search = `?id=${id}&name=${encodeURIComponent(name)}`;
+      return [DEFAULT_CITY];
     }
 
-    function switchCity(name, id) {
-      window.location.search = `?id=${id}&name=${encodeURIComponent(name)}`;
-    }
-
-    // 渲染常用城市
+    // 渲染城市标签
     function renderCities(currentId) {
-      const savedCities = JSON.parse(localStorage.getItem('wuxing_cities') || '[]');
-      const allCities = [...savedCities, ...DEFAULT_CITIES];
-      // 去重
-      const uniqueCities = [];
-      const seen = new Set();
-      for (const city of allCities) {
-        if (!seen.has(city.id)) {
-          seen.add(city.id);
-          uniqueCities.push(city);
-        }
-      }
-      
-      document.getElementById('cityTags').innerHTML = uniqueCities.slice(0, 12).map(city => 
+      const cities = getCities();
+      document.getElementById('cityTags').innerHTML = cities.map(city => 
         `<button class="city-tag ${city.id === currentId ? 'active' : ''}" 
                  onclick="switchCity('${city.name}', '${city.id}')">${city.name}</button>`
       ).join('');
     }
 
-    // 渲染天气
+    function switchCity(name, id) {
+      localStorage.setItem('wuxing_current_city', JSON.stringify({ name, id }));
+      loadCity(name, id);
+    }
+
+    // 加载城市数据
+    async function loadCity(name, id) {
+      document.getElementById('cityName').textContent = name;
+      renderCities(id);
+
+      try {
+        const resp = await fetch(`${API_BASE}/api?location=${id}`);
+        const data = await resp.json();
+        
+        if (data.code !== '200') throw new Error('数据获取失败');
+
+        document.getElementById('date').textContent = data.date;
+        document.getElementById('ganzhi').textContent = 
+          `${data.ganZhi.gan}${data.ganZhi.zhi}日（${data.wuXingName}日）`;
+        
+        renderWeather(data.weather, data.hourly);
+        renderWuxing(data.wuXing);
+        renderAdvice(data.advice);
+        renderHourly(data.hourly);
+      } catch (err) {
+        console.error(err);
+        document.getElementById('weatherCard').innerHTML = 
+          '<div class="loading">数据加载失败，请稍后重试</div>';
+      }
+    }
+
     function renderWeather(weather, hourly) {
       const badWeather = detectBadWeather(hourly);
       const alertIcon = badWeather.length > 0 ? badWeather[0].icon : '';
@@ -334,7 +270,6 @@
         ${tipHtml}`;
     }
 
-    // 检测恶劣天气
     function detectBadWeather(hourly) {
       const badWeatherHours = [];
       const now = new Date();
@@ -357,18 +292,9 @@
       return badWeatherHours;
     }
 
-    // 渲染24小时预报（从当前时间开始）
     function renderHourly(hourly) {
       const now = new Date();
-      const currentHour = now.getHours();
-      
-      // 过滤出当前时间之后的24小时
-      const futureHourly = hourly.filter(h => {
-        const time = new Date(h.fxTime);
-        return time >= now;
-      }).slice(0, 24);
-      
-      // 如果不够24条，用全部数据补充
+      const futureHourly = hourly.filter(h => new Date(h.fxTime) >= now).slice(0, 24);
       const displayHourly = futureHourly.length > 0 ? futureHourly : hourly.slice(0, 24);
       
       document.getElementById('hourlyList').innerHTML = displayHourly.map((h, i) => {
@@ -403,32 +329,10 @@
     }
 
     // 初始化
-    async function init() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const cityId = urlParams.get('id') || '101010100';
-      const cityName = urlParams.get('name') || '北京';
-      
-      renderCities(cityId);
-
-      try {
-        const resp = await fetch(`${API_BASE}/api?location=${cityId}`);
-        const data = await resp.json();
-        
-        if (data.code !== '200') throw new Error('数据获取失败');
-
-        document.getElementById('date').textContent = data.date;
-        document.getElementById('ganzhi').textContent = 
-          `${data.ganZhi.gan}${data.ganZhi.zhi}日（${data.wuXingName}日）`;
-        
-        renderWeather(data.weather, data.hourly);
-        renderWuxing(data.wuXing);
-        renderAdvice(data.advice);
-        renderHourly(data.hourly);
-      } catch (err) {
-        console.error(err);
-        document.getElementById('weatherCard').innerHTML = 
-          '<div class="loading">数据加载失败，请稍后重试</div>';
-      }
+    function init() {
+      const saved = localStorage.getItem('wuxing_current_city');
+      const current = saved ? JSON.parse(saved) : DEFAULT_CITY;
+      loadCity(current.name, current.id);
     }
 
     init();

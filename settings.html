@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>设置 - 五行穿衣指南</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      background: rgba(255,255,255,0.95);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .back-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 50%;
+      background: #f0f0f0;
+      cursor: pointer;
+      font-size: 18px;
+      margin-right: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .back-btn:hover { background: #e0e0e0; }
+    .header h1 { font-size: 20px; color: #333; }
+    
+    .section { margin-bottom: 24px; }
+    .section-title { font-size: 14px; color: #666; margin-bottom: 12px; text-transform: uppercase; }
+    
+    /* 搜索框 */
+    .search-box {
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .search-input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #e9ecef;
+      border-radius: 12px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: #764ba2; }
+    .search-input::placeholder { color: #aaa; }
+    
+    /* 搜索结果 */
+    .search-result {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      max-height: 300px;
+      overflow-y: auto;
+      display: none;
+    }
+    .search-result.show { display: block; }
+    .search-item {
+      padding: 14px 16px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .search-item:hover { background: #f5f5f5; }
+    .search-item:last-child { border-bottom: none; }
+    .search-item .city-name { font-weight: bold; font-size: 16px; color: #333; }
+    .search-item .city-info { font-size: 13px; color: #999; margin-top: 4px; }
+    .search-item .city-id { font-size: 12px; color: #bbb; margin-top: 2px; }
+    .search-hint { padding: 20px; text-align: center; color: #999; font-size: 14px; }
+    
+    /* 已添加城市列表 */
+    .city-list { display: flex; flex-direction: column; gap: 8px; }
+    .city-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: #f8f9fa;
+      border-radius: 12px;
+    }
+    .city-item .city-info { flex: 1; }
+    .city-item .city-name { font-weight: bold; font-size: 16px; color: #333; }
+    .city-item .city-id { font-size: 12px; color: #999; margin-top: 2px; }
+    .city-item .delete-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: #fee;
+      color: #e53935;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .city-item .delete-btn:hover { background: #e53935; color: white; }
+    .city-item.default { background: #e8f5e9; }
+    .city-item.default .delete-btn { display: none; }
+    
+    .empty-tip { text-align: center; padding: 40px; color: #999; }
+    .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #999; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <button class="back-btn" onclick="location.href='index.html'">←</button>
+      <h1>⚙️ 设置</h1>
+    </div>
+
+    <div class="section">
+      <div class="section-title">🔍 添加城市</div>
+      <div class="search-box">
+        <input type="text" class="search-input" id="searchInput" placeholder="输入城市名称搜索..." autocomplete="off">
+      </div>
+      <div class="search-result" id="searchResult">
+        <div class="search-hint">输入城市名称开始搜索</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📍 已添加城市</div>
+      <div class="city-list" id="cityList"></div>
+    </div>
+
+    <div class="footer">
+      提示：第一个城市为默认城市，不可删除
+    </div>
+  </div>
+
+  <script>
+    const QWEATHER_HOST = 'https://jt52qd926j.re.qweatherapi.com';
+    const QWEATHER_KEY = 'aa2e1d81335d4db4bf9f7ac2246fbd4a';
+    const DEFAULT_CITY = { name: '北京', id: '101010100' };
+
+    // 获取城市列表
+    function getCities() {
+      const saved = localStorage.getItem('wuxing_cities');
+      if (saved) {
+        const cities = JSON.parse(saved);
+        if (!cities.find(c => c.id === DEFAULT_CITY.id)) {
+          cities.unshift(DEFAULT_CITY);
+        }
+        return cities;
+      }
+      return [DEFAULT_CITY];
+    }
+
+    // 保存城市列表
+    function saveCities(cities) {
+      localStorage.setItem('wuxing_cities', JSON.stringify(cities));
+    }
+
+    // 渲染城市列表
+    function renderCityList() {
+      const cities = getCities();
+      const listEl = document.getElementById('cityList');
+      
+      if (cities.length === 0) {
+        listEl.innerHTML = '<div class="empty-tip">暂无城市，请搜索添加</div>';
+        return;
+      }
+
+      listEl.innerHTML = cities.map((city, index) => `
+        <div class="city-item ${index === 0 ? 'default' : ''}">
+          <div class="city-info">
+            <div class="city-name">${city.name}</div>
+            <div class="city-id">ID: ${city.id}</div>
+          </div>
+          ${index > 0 ? `<button class="delete-btn" onclick="deleteCity('${city.id}')">✕</button>` : ''}
+        </div>
+      `).join('');
+    }
+
+    // 删除城市
+    function deleteCity(id) {
+      let cities = getCities();
+      cities = cities.filter(c => c.id !== id);
+      saveCities(cities);
+      renderCityList();
+    }
+
+    // 搜索功能
+    let searchTimer = null;
+    const searchInput = document.getElementById('searchInput');
+    const searchResult = document.getElementById('searchResult');
+
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimer);
+      const value = e.target.value.trim();
+      
+      if (value.length < 1) {
+        searchResult.innerHTML = '<div class="search-hint">输入城市名称开始搜索</div>';
+        searchResult.classList.remove('show');
+        return;
+      }
+
+      searchResult.classList.add('show');
+      searchResult.innerHTML = '<div class="search-hint">搜索中...</div>';
+
+      searchTimer = setTimeout(async () => {
+        try {
+          // 使用和风天气地理API搜索
+          const resp = await fetch(`${QWEATHER_HOST}/v2/city/lookup?location=${encodeURIComponent(value)}&key=${QWEATHER_KEY}&number=20`);
+          const data = await resp.json();
+          
+          if (data.code === '200' && data.location && data.location.length > 0) {
+            const cities = getCities();
+            const existIds = new Set(cities.map(c => c.id));
+            
+            searchResult.innerHTML = data.location.map(city => {
+              const isAdded = existIds.has(city.id);
+              return `
+                <div class="search-item" onclick="${isAdded ? '' : `addCity('${city.name}', '${city.id}')`}">
+                  <div class="city-name">${city.name} ${isAdded ? '✓ 已添加' : ''}</div>
+                  <div class="city-info">${city.adm1 || ''} ${city.adm2 || ''}</div>
+                  <div class="city-id">ID: ${city.id}</div>
+                </div>`;
+            }).join('');
+          } else {
+            searchResult.innerHTML = '<div class="search-hint">未找到相关城市，请尝试其他关键词</div>';
+          }
+        } catch (err) {
+          console.error(err);
+          searchResult.innerHTML = '<div class="search-hint">搜索失败，请重试</div>';
+        }
+      }, 300);
+    });
+
+    // 添加城市
+    function addCity(name, id) {
+      let cities = getCities();
+      if (!cities.find(c => c.id === id)) {
+        cities.push({ name, id });
+        saveCities(cities);
+        renderCityList();
+        
+        // 更新搜索结果中的状态
+        const items = searchResult.querySelectorAll('.search-item');
+        items.forEach(item => {
+          if (item.onclick && item.onclick.toString().includes(id)) {
+            item.querySelector('.city-name').innerHTML = `${name} ✓ 已添加`;
+            item.onclick = null;
+          }
+        });
+      }
+    }
+
+    // 初始化
+    renderCityList();
+  </script>
+</body>
+</html>
