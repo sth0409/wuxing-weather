@@ -1,0 +1,12 @@
+{
+  "name": "wuxing-weather",
+  "version": "1.0.0",
+  "description": "五行穿衣指南 + 天气预报",
+  "scripts": {
+    "dev": "wrangler pages dev . --port 8788",
+    "deploy": "wrangler pages deploy . --project-name=wuxing-weather"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

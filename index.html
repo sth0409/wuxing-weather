@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>五行穿衣指南</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      background: rgba(255,255,255,0.95);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    .header { text-align: center; margin-bottom: 24px; }
+    .header h1 { font-size: 24px; color: #333; margin-bottom: 8px; }
+    .header .date { font-size: 14px; color: #666; }
+    .header .ganzhi { font-size: 18px; color: #764ba2; font-weight: bold; margin-top: 8px; }
+    .section { margin-bottom: 20px; }
+    .section-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #eee; }
+    .wuxing-list { display: flex; flex-direction: column; gap: 8px; }
+    .wuxing-item { display: flex; align-items: center; padding: 12px; border-radius: 10px; background: #f8f9fa; }
+    .wuxing-item .emoji { font-size: 20px; margin-right: 12px; }
+    .wuxing-item .level { font-weight: bold; width: 50px; }
+    .wuxing-item .color { flex: 1; text-align: right; }
+    .wuxing-item.lucky { background: #d4edda; border-left: 4px solid #28a745; }
+    .wuxing-item.good { background: #d1ecf1; border-left: 4px solid #17a2b8; }
+    .wuxing-item.neutral { background: #fff3cd; border-left: 4px solid #ffc107; }
+    .wuxing-item.poor { background: #ffeaa7; border-left: 4px solid #fdcb6e; }
+    .wuxing-item.unlucky { background: #f8d7da; border-left: 4px solid #dc3545; }
+    .weather-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; }
+    .weather-main { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .weather-temp { font-size: 48px; font-weight: bold; }
+    .weather-info { text-align: right; }
+    .weather-text { font-size: 18px; }
+    .weather-detail { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 14px; }
+    .weather-detail div { text-align: center; }
+    .advice-list { display: flex; flex-direction: column; gap: 8px; }
+    .advice-item { padding: 12px; background: #f8f9fa; border-radius: 8px; font-size: 14px; }
+    .hourly-list { display: flex; flex-direction: column; gap: 8px; }
+    .hourly-item { display: flex; justify-content: space-between; padding: 10px; background: #f8f9fa; border-radius: 8px; font-size: 14px; }
+    .hourly-item .hour { font-weight: bold; width: 50px; }
+    .hourly-item .temp { width: 60px; }
+    .hourly-item .text { flex: 1; text-align: center; }
+    .hourly-item .wind { text-align: right; color: #666; }
+    .city-selector { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .city-btn { padding: 8px 16px; border: none; border-radius: 20px; background: #e9ecef; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .city-btn:hover { background: #dee2e6; }
+    .city-btn.active { background: #764ba2; color: white; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #999; }
+    .loading { text-align: center; padding: 40px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔮 五行穿衣指南</h1>
+      <div class="date" id="date"></div>
+      <div class="ganzhi" id="ganzhi"></div>
+    </div>
+
+    <div class="city-selector" id="citySelector"></div>
+
+    <div class="weather-card" id="weatherCard">
+      <div class="loading">加载中...</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">🎨 五行穿衣排序</div>
+      <div class="wuxing-list" id="wuxingList"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">💡 今日穿搭建议</div>
+      <div class="advice-list" id="adviceList"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">⏰ 逐时预报</div>
+      <div class="hourly-list" id="hourlyList"></div>
+    </div>
+
+    <div class="footer">
+      数据来源：和风天气 | 五行穿衣基于传统干支历法
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    
+    const CITIES = {
+      '北京': '101010100', '上海': '101020100', '广州': '101280101',
+      '深圳': '101280601', '杭州': '101210101', '南京': '101190101',
+      '成都': '101270101', '重庆': '101040100', '武汉': '101200101',
+      '西安': '101110101', '天津': '101030100', '苏州': '101190401',
+    };
+
+    function getUrlParam(name) {
+      return new URLSearchParams(window.location.search).get(name);
+    }
+
+    function renderCities(currentCity) {
+      document.getElementById('citySelector').innerHTML = Object.keys(CITIES).map(city => 
+        `<button class="city-btn ${city === currentCity ? 'active' : ''}" 
+                 onclick="switchCity('${city}')">${city}</button>`
+      ).join('');
+    }
+
+    function renderWeather(weather) {
+      document.getElementById('weatherCard').innerHTML = `
+        <div class="weather-main">
+          <div class="weather-temp">${weather.temp}°C</div>
+          <div class="weather-info">
+            <div class="weather-text">${weather.text}</div>
+            <div>体感 ${weather.feelsLike}°C</div>
+          </div>
+        </div>
+        <div class="weather-detail">
+          <div>💧 ${weather.humidity}%</div>
+          <div>🌬️ ${weather.windDir}${weather.windScale}级</div>
+          <div>☁️ 云量 ${weather.cloud}%</div>
+        </div>`;
+    }
+
+    function renderWuxing(list) {
+      document.getElementById('wuxingList').innerHTML = list.map(item => `
+        <div class="wuxing-item ${item.cssClass}">
+          <span class="emoji">${item.emoji}</span>
+          <span class="level">${item.level}</span>
+          <span class="color">${item.colorName}</span>
+        </div>`).join('');
+    }
+
+    function renderAdvice(list) {
+      document.getElementById('adviceList').innerHTML = list.map(a => 
+        `<div class="advice-item">${a}</div>`
+      ).join('');
+    }
+
+    function renderHourly(list) {
+      document.getElementById('hourlyList').innerHTML = list.slice(0, 8).map(h => {
+        const hour = h.fxTime.split('T')[1].substring(0, 5);
+        return `
+          <div class="hourly-item">
+            <span class="hour">${hour}</span>
+            <span class="temp">${h.temp}°C</span>
+            <span class="text">${h.text}</span>
+            <span class="wind">${h.windDir}${h.windScale}级</span>
+          </div>`;
+      }).join('');
+    }
+
+    function switchCity(city) {
+      window.location.search = `?city=${encodeURIComponent(city)}`;
+    }
+
+    async function init() {
+      const city = getUrlParam('city') || '北京';
+      const location = CITIES[city] || CITIES['北京'];
+      
+      renderCities(city);
+
+      try {
+        const resp = await fetch(`${API_BASE}/api?location=${location}`);
+        const data = await resp.json();
+        
+        if (data.code !== '200') throw new Error('数据获取失败');
+
+        document.getElementById('date').textContent = data.date;
+        document.getElementById('ganzhi').textContent = 
+          `${data.ganZhi.gan}${data.ganZhi.zhi}日（${data.wuXingName}日）`;
+        
+        renderWeather(data.weather);
+        renderWuxing(data.wuXing);
+        renderAdvice(data.advice);
+        renderHourly(data.hourly);
+      } catch (err) {
+        console.error(err);
+        document.getElementById('weatherCard').innerHTML = 
+          '<div class="loading">数据加载失败，请稍后重试</div>';
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
