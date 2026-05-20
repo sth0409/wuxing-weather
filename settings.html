@@ -93,6 +93,17 @@
       padding: 14px 16px;
       background: #f8f9fa;
       border-radius: 12px;
+      cursor: grab;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .city-item:active { cursor: grabbing; }
+    .city-item.dragging { opacity: 0.5; transform: scale(1.02); }
+    .city-item.drag-over { border-top: 3px solid #764ba2; }
+    .city-item .drag-handle {
+      color: #ccc;
+      margin-right: 12px;
+      font-size: 18px;
     }
     .city-item .city-info { flex: 1; }
     .city-item .city-name { font-weight: bold; font-size: 16px; color: #333; }
@@ -200,15 +211,132 @@
       }
 
       listEl.innerHTML = cities.map((city, index) => `
-        <div class="city-item ${index === 0 ? 'default' : ''}">
+        <div class="city-item ${index === 0 ? 'default' : ''}" 
+             draggable="true"
+             data-index="${index}"
+             ondragstart="handleDragStart(event)"
+             ondragover="handleDragOver(event)"
+             ondragenter="handleDragEnter(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event)"
+             ondragend="handleDragEnd(event)">
+          <span class="drag-handle">⋮⋮</span>
           <div class="city-info">
-            <div class="city-name">${city.name}</div>
+            <div class="city-name">${index === 0 ? '🏠 ' : ''}${city.name}</div>
             <div class="city-id">ID: ${city.id}</div>
           </div>
           ${index > 0 ? `<button class="delete-btn" onclick="deleteCity('${city.id}')">✕</button>` : ''}
         </div>
       `).join('');
     }
+
+    // 拖拽排序
+    let draggedIndex = null;
+
+    function handleDragStart(e) {
+      draggedIndex = parseInt(e.target.dataset.index);
+      e.target.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+
+    function handleDragEnter(e) {
+      e.preventDefault();
+      const item = e.target.closest('.city-item');
+      if (item) item.classList.add('drag-over');
+    }
+
+    function handleDragLeave(e) {
+      const item = e.target.closest('.city-item');
+      if (item) item.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      const item = e.target.closest('.city-item');
+      if (!item) return;
+      
+      const dropIndex = parseInt(item.dataset.index);
+      if (draggedIndex === null || draggedIndex === dropIndex) return;
+      
+      // 重新排序
+      let cities = getCities();
+      const [removed] = cities.splice(draggedIndex, 1);
+      cities.splice(dropIndex, 0, removed);
+      
+      saveCities(cities);
+      renderCityList();
+    }
+
+    function handleDragEnd(e) {
+      e.target.classList.remove('dragging');
+      document.querySelectorAll('.city-item').forEach(item => {
+        item.classList.remove('drag-over');
+      });
+      draggedIndex = null;
+    }
+
+    // 触摸拖拽支持
+    let touchDragIndex = null;
+    let touchStartY = 0;
+    let touchedElement = null;
+
+    document.addEventListener('touchstart', (e) => {
+      const item = e.target.closest('.city-item');
+      if (!item || e.target.closest('.delete-btn')) return;
+      
+      touchDragIndex = parseInt(item.dataset.index);
+      touchStartY = e.touches[0].clientY;
+      touchedElement = item;
+      item.classList.add('dragging');
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (touchDragIndex === null || !touchedElement) return;
+      
+      const touch = e.touches[0];
+      const items = document.querySelectorAll('.city-item');
+      
+      items.forEach(item => {
+        const rect = item.getBoundingClientRect();
+        if (touch.clientY > rect.top && touch.clientY < rect.bottom) {
+          items.forEach(i => i.classList.remove('drag-over'));
+          item.classList.add('drag-over');
+        }
+      });
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+      if (touchDragIndex === null || !touchedElement) return;
+      
+      const touch = e.changedTouches[0];
+      const items = document.querySelectorAll('.city-item');
+      let dropIndex = touchDragIndex;
+      
+      items.forEach(item => {
+        const rect = item.getBoundingClientRect();
+        if (touch.clientY > rect.top && touch.clientY < rect.bottom) {
+          dropIndex = parseInt(item.dataset.index);
+        }
+        item.classList.remove('drag-over');
+      });
+      
+      if (dropIndex !== touchDragIndex) {
+        let cities = getCities();
+        const [removed] = cities.splice(touchDragIndex, 1);
+        cities.splice(dropIndex, 0, removed);
+        saveCities(cities);
+        renderCityList();
+      }
+      
+      touchedElement.classList.remove('dragging');
+      touchDragIndex = null;
+      touchedElement = null;
+    });
 
     // 删除城市
     function deleteCity(id) {
