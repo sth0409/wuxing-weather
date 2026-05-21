@@ -161,6 +161,7 @@
 
   <script>
     const API_BASE = window.location.origin;
+    const CITIES_API = `${API_BASE}/cities`;
     
     // 默认城市
     const DEFAULT_CITY = { name: '北京', id: '101010100' };
@@ -181,23 +182,29 @@
       return '🌤️';
     }
 
-    // 获取用户保存的城市列表
-    function getCities() {
-      const saved = localStorage.getItem('wuxing_cities');
-      if (saved) {
-        const cities = JSON.parse(saved);
-        // 确保默认城市在列表中
-        if (!cities.find(c => c.id === DEFAULT_CITY.id)) {
-          cities.unshift(DEFAULT_CITY);
-        }
-        return cities;
+    function normalizeCities(cities) {
+      const list = Array.isArray(cities) ? cities : [];
+      if (!list.find(c => c.id === DEFAULT_CITY.id)) {
+        list.unshift(DEFAULT_CITY);
       }
-      return [DEFAULT_CITY];
+      return list;
+    }
+
+    // 获取保存的城市列表
+    async function getCities() {
+      try {
+        const resp = await fetch(CITIES_API);
+        const data = await resp.json();
+        if (data.code === '200') return normalizeCities(data.cities);
+      } catch (err) {
+        console.error('城市列表读取失败:', err);
+      }
+      return normalizeCities([]);
     }
 
     // 渲染城市标签
-    function renderCities(currentId) {
-      const cities = getCities();
+    async function renderCities(currentId) {
+      const cities = await getCities();
       document.getElementById('cityTags').innerHTML = cities.map(city => 
         `<button class="city-tag ${city.id === currentId ? 'active' : ''}" 
                  onclick="switchCity('${city.name}', '${city.id}')">${city.name}</button>`
@@ -212,7 +219,7 @@
     // 加载城市数据
     async function loadCity(name, id) {
       document.getElementById('cityName').textContent = name;
-      renderCities(id);
+      await renderCities(id);
 
       try {
         const resp = await fetch(`${API_BASE}/api?location=${id}`);
@@ -358,11 +365,11 @@
             if (data.code === '200' && data.cityName) {
               // 保存定位城市
               const city = { name: data.cityName, id: data.cityId };
-              let cities = getCities();
+              let cities = await getCities();
               const existIndex = cities.findIndex(c => c.id === city.id);
               if (existIndex === -1) {
                 cities.push(city);
-                saveCities(cities);
+                await saveCities(cities);
               }
               
               // 切换到定位城市
@@ -415,8 +422,16 @@
       }
     }
 
-    function saveCities(cities) {
-      localStorage.setItem('wuxing_cities', JSON.stringify(cities));
+    async function saveCities(cities) {
+      const normalized = normalizeCities(cities);
+      const resp = await fetch(CITIES_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cities: normalized })
+      });
+      const data = await resp.json();
+      if (data.code !== '200') throw new Error(data.message || '城市列表保存失败');
+      return data.cities;
     }
 
     // 初始化

@@ -1,7 +1,12 @@
 # Pages 项目配置
 name = "wuxing-weather"
+compatibility_date = "2026-05-21"
 
 # 环境变量（在 Cloudflare Dashboard 中配置更安全）
 [vars]
 QWEATHER_KEY = "aa2e1d81335d4db4bf9f7ac2246fbd4a"
 QWEATHER_HOST = "https://jt52qd926j.re.qweatherapi.com"
+
+[[kv_namespaces]]
+binding = "CITIES_KV"
+id = "8a5ab9cc9e604c20ac69437eecea9604"

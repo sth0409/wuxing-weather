@@ -178,31 +178,48 @@
   </div>
 
   <script>
+    const API_BASE = window.location.origin;
+    const CITIES_API = `${API_BASE}/cities`;
     const QWEATHER_HOST = 'https://jt52qd926j.re.qweatherapi.com';
     const QWEATHER_KEY = 'aa2e1d81335d4db4bf9f7ac2246fbd4a';
     const DEFAULT_CITY = { name: '北京', id: '101010100' };
 
-    // 获取城市列表
-    function getCities() {
-      const saved = localStorage.getItem('wuxing_cities');
-      if (saved) {
-        const cities = JSON.parse(saved);
-        if (!cities.find(c => c.id === DEFAULT_CITY.id)) {
-          cities.unshift(DEFAULT_CITY);
-        }
-        return cities;
+    function normalizeCities(cities) {
+      const list = Array.isArray(cities) ? cities : [];
+      if (!list.find(c => c.id === DEFAULT_CITY.id)) {
+        list.unshift(DEFAULT_CITY);
       }
-      return [DEFAULT_CITY];
+      return list;
+    }
+
+    // 获取城市列表
+    async function getCities() {
+      try {
+        const resp = await fetch(CITIES_API);
+        const data = await resp.json();
+        if (data.code === '200') return normalizeCities(data.cities);
+      } catch (err) {
+        console.error('城市列表读取失败:', err);
+      }
+      return normalizeCities([]);
     }
 
     // 保存城市列表
-    function saveCities(cities) {
-      localStorage.setItem('wuxing_cities', JSON.stringify(cities));
+    async function saveCities(cities) {
+      const normalized = normalizeCities(cities);
+      const resp = await fetch(CITIES_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cities: normalized })
+      });
+      const data = await resp.json();
+      if (data.code !== '200') throw new Error(data.message || '城市列表保存失败');
+      return data.cities;
     }
 
     // 渲染城市列表
-    function renderCityList() {
-      const cities = getCities();
+    async function renderCityList() {
+      const cities = await getCities();
       const listEl = document.getElementById('cityList');
       
       if (cities.length === 0) {
@@ -255,7 +272,7 @@
       if (item) item.classList.remove('drag-over');
     }
 
-    function handleDrop(e) {
+    async function handleDrop(e) {
       e.preventDefault();
       const item = e.target.closest('.city-item');
       if (!item) return;
@@ -264,12 +281,12 @@
       if (draggedIndex === null || draggedIndex === dropIndex) return;
       
       // 重新排序
-      let cities = getCities();
+      let cities = await getCities();
       const [removed] = cities.splice(draggedIndex, 1);
       cities.splice(dropIndex, 0, removed);
       
-      saveCities(cities);
-      renderCityList();
+      await saveCities(cities);
+      await renderCityList();
     }
 
     function handleDragEnd(e) {
@@ -310,7 +327,7 @@
       });
     }, { passive: true });
 
-    document.addEventListener('touchend', (e) => {
+    document.addEventListener('touchend', async (e) => {
       if (touchDragIndex === null || !touchedElement) return;
       
       const touch = e.changedTouches[0];
@@ -326,11 +343,11 @@
       });
       
       if (dropIndex !== touchDragIndex) {
-        let cities = getCities();
+        let cities = await getCities();
         const [removed] = cities.splice(touchDragIndex, 1);
         cities.splice(dropIndex, 0, removed);
-        saveCities(cities);
-        renderCityList();
+        await saveCities(cities);
+        await renderCityList();
       }
       
       touchedElement.classList.remove('dragging');
@@ -339,11 +356,11 @@
     });
 
     // 删除城市
-    function deleteCity(id) {
-      let cities = getCities();
+    async function deleteCity(id) {
+      let cities = await getCities();
       cities = cities.filter(c => c.id !== id);
-      saveCities(cities);
-      renderCityList();
+      await saveCities(cities);
+      await renderCityList();
     }
 
     // 搜索功能
@@ -371,7 +388,7 @@
           const data = await resp.json();
           
           if (data.code === '200' && data.location && data.location.length > 0) {
-            const cities = getCities();
+            const cities = await getCities();
             const existIds = new Set(cities.map(c => c.id));
             
             searchResult.innerHTML = data.location.map(city => {
@@ -394,12 +411,12 @@
     });
 
     // 添加城市
-    function addCity(name, id) {
-      let cities = getCities();
+    async function addCity(name, id) {
+      let cities = await getCities();
       if (!cities.find(c => c.id === id)) {
         cities.push({ name, id });
-        saveCities(cities);
-        renderCityList();
+        await saveCities(cities);
+        await renderCityList();
         
         // 更新搜索结果中的状态
         const items = searchResult.querySelectorAll('.search-item');
@@ -438,13 +455,13 @@
               const city = { name: data.cityName, id: data.cityId };
               
               // 检查是否已添加
-              let cities = getCities();
+              let cities = await getCities();
               if (cities.find(c => c.id === city.id)) {
                 alert(`${city.name} 已在列表中`);
               } else {
                 cities.push(city);
-                saveCities(cities);
-                renderCityList();
+                await saveCities(cities);
+                await renderCityList();
                 alert(`已添加：${city.name}`);
               }
             } else {
