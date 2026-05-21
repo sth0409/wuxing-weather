@@ -53,22 +53,27 @@ function getWuxingOrder(zhi) {
   }));
 }
 
-function getAdvice(temp, wuxingOrder) {
+function getAdvice(temp, wuxingOrder, isToday) {
   const luckyColor = wuxingOrder[0].colorName;
   const unluckyColor = wuxingOrder[4].colorName;
+  const dayLabel = isToday ? '今日' : '当日';
   
-  let tempAdvice = '';
-  if (temp <= 0) tempAdvice = '🧣 天气寒冷，建议穿厚外套、羽绒服';
-  else if (temp <= 10) tempAdvice = '🧥 天气较冷，建议穿外套、毛衣';
-  else if (temp <= 20) tempAdvice = '👔 天气适宜，建议穿薄外套、长袖';
-  else if (temp <= 30) tempAdvice = '👕 天气较热，建议穿短袖、薄衣物';
-  else tempAdvice = '🩳 天气炎热，建议穿轻薄透气衣物';
-  
-  return [
-    tempAdvice,
-    `✅ 今日宜穿：${luckyColor}`,
-    `❌ 今日忌穿：${unluckyColor}`
+  const advice = [
+    `✅ ${dayLabel}宜穿：${luckyColor}`,
+    `❌ ${dayLabel}忌穿：${unluckyColor}`
   ];
+
+  if (Number.isFinite(temp)) {
+    let tempAdvice = '';
+    if (temp <= 0) tempAdvice = '🧣 天气寒冷，建议穿厚外套、羽绒服';
+    else if (temp <= 10) tempAdvice = '🧥 天气较冷，建议穿外套、毛衣';
+    else if (temp <= 20) tempAdvice = '👔 天气适宜，建议穿薄外套、长袖';
+    else if (temp <= 30) tempAdvice = '👕 天气较热，建议穿短袖、薄衣物';
+    else tempAdvice = '🩳 天气炎热，建议穿轻薄透气衣物';
+    advice.unshift(tempAdvice);
+  }
+
+  return advice;
 }
 
 // ============ 天气API ============
@@ -85,6 +90,12 @@ async function getWeather24h(location, env) {
   return resp.json();
 }
 
+async function getWeather7d(location, env) {
+  const url = `${env.QWEATHER_HOST}/v7/weather/7d?location=${location}&key=${env.QWEATHER_KEY}`;
+  const resp = await fetch(url);
+  return resp.json();
+}
+
 // 通过经纬度获取城市信息
 async function getCityByCoords(lon, lat, env) {
   const url = `${env.QWEATHER_HOST}/v2/city/lookup?location=${lon},${lat}&key=${env.QWEATHER_KEY}`;
@@ -96,6 +107,57 @@ async function getCityByCoords(lon, lat, env) {
   return null;
 }
 
+function getBeijingToday() {
+  const now = new Date();
+  const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+  return {
+    year: beijingTime.getUTCFullYear(),
+    month: beijingTime.getUTCMonth() + 1,
+    day: beijingTime.getUTCDate()
+  };
+}
+
+function toDateKey(parts) {
+  const month = String(parts.month).padStart(2, '0');
+  const day = String(parts.day).padStart(2, '0');
+  return `${parts.year}-${month}-${day}`;
+}
+
+function parseDateParam(value) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return getBeijingToday();
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return getBeijingToday();
+  }
+
+  return { year, month, day };
+}
+
+function toUtcDate(parts) {
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+}
+
+function mapDailyWeather(day) {
+  if (!day) return null;
+  return {
+    temp: `${day.tempMin}-${day.tempMax}`,
+    feelsLike: '',
+    text: day.textDay,
+    humidity: day.humidity || '--',
+    windDir: day.windDirDay || '',
+    windScale: day.windScaleDay || '--',
+    cloud: day.cloud || '--'
+  };
+}
+
 // ============ Pages Function 入口 ============
 
 export async function onRequestGet(context) {
@@ -103,10 +165,13 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   
   const locationParam = url.searchParams.get('location') || '101010100';
+  const selectedParts = parseDateParam(url.searchParams.get('date'));
+  const selectedDateKey = toDateKey(selectedParts);
+  const todayKey = toDateKey(getBeijingToday());
+  const selectedDate = toUtcDate(selectedParts);
+  const isToday = selectedDateKey === todayKey;
   
-  const now = new Date();
-  const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-  const ganZhi = getGanZhi(beijingTime);
+  const ganZhi = getGanZhi(selectedDate);
   const wuXing = getWuxingOrder(ganZhi.zhi);
   
   // 判断是城市ID还是经纬度
@@ -125,9 +190,10 @@ export async function onRequestGet(context) {
     }
   }
   
-  const [weatherData, hourlyData] = await Promise.all([
+  const [weatherData, hourlyData, dailyData] = await Promise.all([
     getWeatherNow(location, env),
-    getWeather24h(location, env)
+    getWeather24h(location, env),
+    getWeather7d(location, env)
   ]);
   
   if (weatherData.code !== '200') {
@@ -137,17 +203,27 @@ export async function onRequestGet(context) {
     });
   }
   
-  const temp = parseInt(weatherData.now.temp);
-  const advice = getAdvice(temp, wuXing);
+  const dailyWeather = dailyData.daily?.find(day => day.fxDate === selectedDateKey);
+  const weather = isToday ? weatherData.now : mapDailyWeather(dailyWeather);
+  const hourly = isToday ? (hourlyData.hourly || []) : [];
+  const temp = isToday
+    ? parseInt(weatherData.now.temp)
+    : dailyWeather
+      ? Math.round((parseInt(dailyWeather.tempMax) + parseInt(dailyWeather.tempMin)) / 2)
+      : null;
+  const advice = getAdvice(temp, wuXing, isToday);
   
   return new Response(JSON.stringify({
     code: '200',
-    date: `${beijingTime.getFullYear()}年${beijingTime.getMonth() + 1}月${beijingTime.getDate()}日`,
+    date: `${selectedParts.year}年${selectedParts.month}月${selectedParts.day}日`,
+    selectedDate: selectedDateKey,
+    isToday,
     ganZhi,
     wuXingName: ZHI_WU_XING[ganZhi.zhi],
     wuXing,
-    weather: weatherData.now,
-    hourly: hourlyData.hourly || [],
+    weather,
+    weatherMode: isToday ? 'now' : weather ? 'daily' : 'none',
+    hourly,
     advice,
     cityName: cityName || weatherData.now.obsCity || '',
     cityId

@@ -26,6 +26,32 @@
     @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
     .header .date { font-size: 14px; color: #666; }
     .header .ganzhi { font-size: 18px; color: #764ba2; font-weight: bold; margin-top: 8px; }
+    .date-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0 2px;
+      padding: 4px;
+      border-radius: 999px;
+      background: #f0f0f0;
+    }
+    .date-nav-btn {
+      min-width: 34px;
+      height: 30px;
+      border: none;
+      border-radius: 999px;
+      background: white;
+      color: #333;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 0 10px;
+      transition: all 0.2s;
+    }
+    .date-nav-btn:hover { background: #764ba2; color: white; }
+    .date-nav-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .date-nav-btn:disabled:hover { background: white; color: #333; }
+    .date-nav-label { min-width: 44px; font-size: 13px; color: #666; font-weight: 600; }
     
     /* 顶部操作栏 */
     .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
@@ -122,6 +148,12 @@
     <div class="header">
       <h1>🔮 五行穿衣指南<span class="alert-icon"></span></h1>
       <div class="date" id="date"></div>
+      <div class="date-nav">
+        <button class="date-nav-btn" id="prevDateBtn" onclick="changeDate(-1)" title="前一天">‹</button>
+        <button class="date-nav-btn" id="todayBtn" onclick="resetDate()">今天</button>
+        <button class="date-nav-btn" id="nextDateBtn" onclick="changeDate(1)" title="后一天">›</button>
+        <span class="date-nav-label" id="dateOffsetLabel">今天</span>
+      </div>
       <div class="ganzhi" id="ganzhi"></div>
     </div>
 
@@ -145,12 +177,12 @@
     </div>
 
     <div class="section">
-      <div class="section-title">💡 今日穿搭建议</div>
+      <div class="section-title" id="adviceTitle">💡 今日穿搭建议</div>
       <div class="advice-list" id="adviceList"></div>
     </div>
 
     <div class="section">
-      <div class="section-title">⏰ 未来24小时预报</div>
+      <div class="section-title" id="hourlyTitle">⏰ 未来24小时预报</div>
       <div class="hourly-scroll" id="hourlyList"></div>
     </div>
 
@@ -165,6 +197,10 @@
     
     // 默认城市
     const DEFAULT_CITY = { name: '北京', id: '101010100' };
+    const MIN_DATE_OFFSET = -2;
+    const MAX_DATE_OFFSET = 30;
+    let selectedDateKey = getTodayKey();
+    let currentCity = DEFAULT_CITY;
 
     // 天气图标映射
     const WEATHER_ICONS = {
@@ -180,6 +216,69 @@
         if (text.includes(key)) return icon;
       }
       return '🌤️';
+    }
+
+    function getTodayKey() {
+      const now = new Date();
+      const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+      const year = beijingTime.getUTCFullYear();
+      const month = String(beijingTime.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(beijingTime.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function parseDateKey(key) {
+      const [year, month, day] = key.split('-').map(Number);
+      return new Date(Date.UTC(year, month - 1, day));
+    }
+
+    function formatDateKey(date) {
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function addDays(key, days) {
+      const date = parseDateKey(key);
+      date.setUTCDate(date.getUTCDate() + days);
+      return formatDateKey(date);
+    }
+
+    function getDateOffset(key) {
+      return Math.round((parseDateKey(key) - parseDateKey(getTodayKey())) / (1000 * 60 * 60 * 24));
+    }
+
+    function getDateOffsetLabel(offset) {
+      if (offset === 0) return '今天';
+      if (offset === -1) return '昨天';
+      if (offset === -2) return '前天';
+      if (offset === 1) return '明天';
+      if (offset === 2) return '后天';
+      return offset > 0 ? `${offset}天后` : `${Math.abs(offset)}天前`;
+    }
+
+    function updateDateControls() {
+      const offset = getDateOffset(selectedDateKey);
+      document.getElementById('prevDateBtn').disabled = offset <= MIN_DATE_OFFSET;
+      document.getElementById('nextDateBtn').disabled = offset >= MAX_DATE_OFFSET;
+      document.getElementById('todayBtn').disabled = offset === 0;
+      document.getElementById('dateOffsetLabel').textContent = getDateOffsetLabel(offset);
+      document.getElementById('adviceTitle').textContent = offset === 0 ? '💡 今日穿搭建议' : '💡 当日穿搭建议';
+      document.getElementById('hourlyTitle').textContent = offset === 0 ? '⏰ 未来24小时预报' : '⏰ 24小时预报';
+    }
+
+    function changeDate(delta) {
+      const nextKey = addDays(selectedDateKey, delta);
+      const offset = getDateOffset(nextKey);
+      if (offset < MIN_DATE_OFFSET || offset > MAX_DATE_OFFSET) return;
+      selectedDateKey = nextKey;
+      loadCity(currentCity.name, currentCity.id);
+    }
+
+    function resetDate() {
+      selectedDateKey = getTodayKey();
+      loadCity(currentCity.name, currentCity.id);
     }
 
     function normalizeCities(cities) {
@@ -212,17 +311,22 @@
     }
 
     function switchCity(name, id) {
-      localStorage.setItem('wuxing_current_city', JSON.stringify({ name, id }));
+      currentCity = { name, id };
+      localStorage.setItem('wuxing_current_city', JSON.stringify(currentCity));
       loadCity(name, id);
     }
 
     // 加载城市数据
     async function loadCity(name, id) {
+      currentCity = { name, id };
       document.getElementById('cityName').textContent = name;
+      document.getElementById('weatherCard').innerHTML = '<div class="loading">加载中...</div>';
+      document.getElementById('hourlyList').innerHTML = '';
+      updateDateControls();
       await renderCities(id);
 
       try {
-        const resp = await fetch(`${API_BASE}/api?location=${id}`);
+        const resp = await fetch(`${API_BASE}/api?location=${id}&date=${selectedDateKey}`);
         const data = await resp.json();
         
         if (data.code !== '200') throw new Error('数据获取失败');
@@ -231,7 +335,9 @@
         document.getElementById('ganzhi').textContent = 
           `${data.ganZhi.gan}${data.ganZhi.zhi}日（${data.wuXingName}日）`;
         
-        renderWeather(data.weather, data.hourly);
+        selectedDateKey = data.selectedDate || selectedDateKey;
+        updateDateControls();
+        renderWeather(data.weather, data.hourly, data.weatherMode);
         renderWuxing(data.wuXing);
         renderAdvice(data.advice);
         renderHourly(data.hourly);
@@ -242,14 +348,25 @@
       }
     }
 
-    function renderWeather(weather, hourly) {
+    function renderWeather(weather, hourly, weatherMode) {
+      if (!weather) {
+        removeAlertIcon();
+        document.getElementById('weatherCard').innerHTML = `
+          <div class="weather-main">
+            <div>
+              <div class="weather-text">暂无天气数据</div>
+              <div class="weather-tip" style="margin-top: 12px;">当前仅显示所选日期的五行穿衣信息，天气预报暂无数据。</div>
+            </div>
+          </div>`;
+        return;
+      }
+
       const badWeather = detectBadWeather(hourly);
       const alertIcon = badWeather.length > 0 ? badWeather[0].icon : '';
       
-      const titleEl = document.querySelector('.header h1');
-      const existingIcon = titleEl.querySelector('.alert-icon');
-      if (existingIcon) existingIcon.remove();
+      removeAlertIcon();
       if (alertIcon) {
+        const titleEl = document.querySelector('.header h1');
         const iconSpan = document.createElement('span');
         iconSpan.className = 'alert-icon';
         iconSpan.textContent = alertIcon;
@@ -258,12 +375,20 @@
       
       let tipHtml = '';
       if (badWeather.length > 0) {
-        const timeRange = badWeather.map(b => b.hour).join('、');
+        const timeRange = formatBadWeatherTimes(badWeather);
         const weatherTypes = [...new Set(badWeather.map(b => b.text))].join('、');
         tipHtml = `
           <div class="weather-tip">
             <div class="weather-tip-title">⚠️ 温馨提示</div>
-            <div>今日 ${timeRange} 将出现${weatherTypes}，出门请记得带伞/注意安全！</div>
+            <div>${timeRange} 将出现${weatherTypes}，出门请记得带伞/注意安全！</div>
+          </div>`;
+      }
+
+      if (weatherMode === 'daily') {
+        tipHtml = `
+          <div class="weather-tip">
+            <div class="weather-tip-title">📅 日预报</div>
+            <div>未来日期显示当天预报，实时体感和未来24小时只在今天可用。</div>
           </div>`;
       }
 
@@ -272,7 +397,7 @@
           <div class="weather-temp">${weather.temp}°C</div>
           <div class="weather-info">
             <div class="weather-text">${weather.text}</div>
-            <div>体感 ${weather.feelsLike}°C</div>
+            <div>${weather.feelsLike ? `体感 ${weather.feelsLike}°C` : '日间预报'}</div>
           </div>
         </div>
         <div class="weather-detail">
@@ -281,6 +406,12 @@
           <div>☁️ 云量 ${weather.cloud}%</div>
         </div>
         ${tipHtml}`;
+    }
+
+    function removeAlertIcon() {
+      const titleEl = document.querySelector('.header h1');
+      const existingIcon = titleEl.querySelector('.alert-icon');
+      if (existingIcon) existingIcon.remove();
     }
 
     function detectBadWeather(hourly) {
@@ -296,6 +427,7 @@
             text.includes('雾') || text.includes('霾') || text.includes('暴')) {
           const hour = String(time.getHours()).padStart(2, '0');
           badWeatherHours.push({
+            day: getRelativeDayLabel(time),
             hour: `${hour}:00`,
             text: text,
             icon: getWeatherIcon(text)
@@ -305,7 +437,39 @@
       return badWeatherHours;
     }
 
+    function getRelativeDayLabel(time) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const target = new Date(time);
+      target.setHours(0, 0, 0, 0);
+
+      const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) return '今天';
+      if (diffDays === 1) return '明天';
+      if (diffDays === 2) return '后天';
+      return `${target.getMonth() + 1}月${target.getDate()}日`;
+    }
+
+    function formatBadWeatherTimes(badWeather) {
+      const grouped = new Map();
+
+      for (const item of badWeather) {
+        if (!grouped.has(item.day)) grouped.set(item.day, []);
+        grouped.get(item.day).push(item.hour);
+      }
+
+      return [...grouped.entries()]
+        .map(([day, hours]) => `${day} ${hours.join('、')}`)
+        .join('；');
+    }
+
     function renderHourly(hourly) {
+      if (!hourly || hourly.length === 0) {
+        document.getElementById('hourlyList').innerHTML = '<div class="loading">所选日期暂无24小时预报</div>';
+        return;
+      }
+
       const now = new Date();
       const futureHourly = hourly.filter(h => new Date(h.fxTime) >= now).slice(0, 24);
       const displayHourly = futureHourly.length > 0 ? futureHourly : hourly.slice(0, 24);
@@ -373,6 +537,7 @@
               }
               
               // 切换到定位城市
+              currentCity = city;
               localStorage.setItem('wuxing_current_city', JSON.stringify(city));
               loadCity(city.name, city.id);
             } else {
@@ -402,7 +567,7 @@
     // 直接用经纬度加载天气
     async function loadWeatherByCoords(lat, lon) {
       try {
-        const resp = await fetch(`${API_BASE}/api?location=${lon},${lat}`);
+        const resp = await fetch(`${API_BASE}/api?location=${lon},${lat}&date=${selectedDateKey}`);
         const data = await resp.json();
         
         if (data.code !== '200') throw new Error('数据获取失败');
@@ -412,7 +577,9 @@
           `${data.ganZhi.gan}${data.ganZhi.zhi}日（${data.wuXingName}日）`;
         document.getElementById('cityName').textContent = data.cityName || '当前位置';
         
-        renderWeather(data.weather, data.hourly);
+        selectedDateKey = data.selectedDate || selectedDateKey;
+        updateDateControls();
+        renderWeather(data.weather, data.hourly, data.weatherMode);
         renderWuxing(data.wuXing);
         renderAdvice(data.advice);
         renderHourly(data.hourly);
@@ -438,6 +605,8 @@
     function init() {
       const saved = localStorage.getItem('wuxing_current_city');
       const current = saved ? JSON.parse(saved) : DEFAULT_CITY;
+      currentCity = current;
+      selectedDateKey = getTodayKey();
       loadCity(current.name, current.id);
     }
 
