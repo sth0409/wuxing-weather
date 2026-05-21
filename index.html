@@ -95,11 +95,11 @@
     .wuxing-item .emoji { font-size: 20px; margin-right: 12px; }
     .wuxing-item .level { font-weight: bold; width: 50px; }
     .wuxing-item .color { flex: 1; text-align: right; }
-    .wuxing-item.lucky { background: linear-gradient(90deg, #fff9c4 0%, #fffde7 100%); border-left: 4px solid #f9a825; }
-    .wuxing-item.good { background: linear-gradient(90deg, #ffcdd2 0%, #ffebee 100%); border-left: 4px solid #e53935; }
-    .wuxing-item.neutral { background: linear-gradient(90deg, #c8e6c9 0%, #e8f5e9 100%); border-left: 4px solid #43a047; }
-    .wuxing-item.poor { background: linear-gradient(90deg, #b0bec5 0%, #eceff1 100%); border-left: 4px solid #546e7a; }
-    .wuxing-item.unlucky { background: linear-gradient(90deg, #e0e0e0 0%, #fafafa 100%); border-left: 4px solid #9e9e9e; }
+    .wuxing-item.color-green { background: linear-gradient(90deg, #c8e6c9 0%, #e8f5e9 100%); border-left: 4px solid #43a047; }
+    .wuxing-item.color-red { background: linear-gradient(90deg, #ffcdd2 0%, #ffebee 100%); border-left: 4px solid #e53935; }
+    .wuxing-item.color-yellow { background: linear-gradient(90deg, #fff9c4 0%, #fffde7 100%); border-left: 4px solid #f9a825; }
+    .wuxing-item.color-white { background: linear-gradient(90deg, #eceff1 0%, #fafafa 100%); border-left: 4px solid #b0bec5; }
+    .wuxing-item.color-black { background: linear-gradient(90deg, #cfd8dc 0%, #eceff1 100%); border-left: 4px solid #546e7a; }
     .weather-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; }
     .weather-main { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     .weather-temp { font-size: 48px; font-weight: bold; }
@@ -492,11 +492,22 @@
 
     function renderWuxing(list) {
       document.getElementById('wuxingList').innerHTML = list.map(item => `
-        <div class="wuxing-item ${item.cssClass}">
+        <div class="wuxing-item ${getWuxingColorClass(item.color)}">
           <span class="emoji">${item.emoji}</span>
           <span class="level">${item.level}</span>
           <span class="color">${item.colorName}</span>
         </div>`).join('');
+    }
+
+    function getWuxingColorClass(color) {
+      const classMap = {
+        '绿': 'color-green',
+        '红': 'color-red',
+        '黄': 'color-yellow',
+        '白': 'color-white',
+        '黑': 'color-black'
+      };
+      return classMap[color] || '';
     }
 
     function renderAdvice(list) {
